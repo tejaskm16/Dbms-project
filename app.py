@@ -3,13 +3,19 @@ import mysql.connector
 import pandas as pd
 from datetime import date
 
-# MYSQL CONNECTION
-conn = mysql.connector.connect(
-    host="localhost",
-    user="studentadmin",
-    password="1234",
-    database="attendance_db1"
-)
+
+try:
+    conn = mysql.connector.connect(
+        host="localhost",
+        user="studentadmin",
+        password="1234",
+        database="attendance_db1"
+    )
+    st.success("Database Connected")
+
+except Exception as e:
+    st.error(f"Database Error: {e}")
+    st.stop()
 
 cursor = conn.cursor()
 
