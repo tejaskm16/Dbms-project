@@ -1,17 +1,32 @@
 import streamlit as st
-import mysql.connector
+import sqlite3
 import pandas as pd
 from datetime import date
 
-# MYSQL CONNECTION
-conn = mysql.connector.connect(
-    host="your-cloud-host",
-    user="your-user",
-    password="tejas",
-    database="attedance_db1",
-    port=3306
-)
+# DATABASE CONNECTION
+conn = sqlite3.connect("attendance.db", check_same_thread=False)
 cursor = conn.cursor()
+
+# CREATE TABLES
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS students (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    usn TEXT UNIQUE NOT NULL
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS attendance (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER,
+    date TEXT,
+    status TEXT,
+    FOREIGN KEY(student_id) REFERENCES students(id)
+)
+""")
+
+conn.commit()
 
 # PAGE TITLE
 st.title("Student Attendance System")
@@ -29,7 +44,6 @@ menu = [
 choice = st.sidebar.radio("Menu", menu)
 
 # ADD STUDENT
-# ADD STUDENT
 if choice == "Add Student":
 
     st.subheader("Add Student")
@@ -45,34 +59,24 @@ if choice == "Add Student":
 
         if name and usn:
 
-            # CHECK DUPLICATE NAME OR USN
-            query = """
-            SELECT * FROM students
-            WHERE name = %s OR usn = %s
-            """
-
-            values = (name, usn)
-
-            cursor.execute(query, values)
+            cursor.execute(
+                "SELECT * FROM students WHERE name=? OR usn=?",
+                (name, usn)
+            )
 
             existing_student = cursor.fetchone()
 
             if existing_student:
-
                 st.error(
                     "Student already exists with same Name or USN"
                 )
 
             else:
+                cursor.execute(
+                    "INSERT INTO students (name, usn) VALUES (?, ?)",
+                    (name, usn)
+                )
 
-                query = """
-                INSERT INTO students (name, usn)
-                VALUES (%s, %s)
-                """
-
-                values = (name, usn)
-
-                cursor.execute(query, values)
                 conn.commit()
 
                 st.success("Student Added Successfully")
@@ -140,19 +144,18 @@ elif choice == "Mark Attendance":
 
             for student_id, status in attendance_data.items():
 
-                query = """
-                INSERT INTO attendance
-                (student_id, date, status)
-                VALUES (%s, %s, %s)
-                """
-
-                values = (
-                    student_id,
-                    date.today(),
-                    status
+                cursor.execute(
+                    """
+                    INSERT INTO attendance
+                    (student_id, date, status)
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        student_id,
+                        str(date.today()),
+                        status
+                    )
                 )
-
-                cursor.execute(query, values)
 
             conn.commit()
 
@@ -161,7 +164,6 @@ elif choice == "Mark Attendance":
     else:
         st.warning("No Students Found")
 
-# VIEW ATTENDANCE
 # VIEW ATTENDANCE
 elif choice == "View Attendance":
 
@@ -200,9 +202,7 @@ elif choice == "View Attendance":
 
         st.write("### Delete Attendance Record")
 
-        attendance_ids = [
-            row[0] for row in data
-        ]
+        attendance_ids = [row[0] for row in data]
 
         selected_id = st.selectbox(
             "Select Attendance ID",
@@ -211,13 +211,8 @@ elif choice == "View Attendance":
 
         if st.button("Delete Attendance"):
 
-            delete_query = """
-            DELETE FROM attendance
-            WHERE id = %s
-            """
-
             cursor.execute(
-                delete_query,
+                "DELETE FROM attendance WHERE id=?",
                 (selected_id,)
             )
 
@@ -253,7 +248,7 @@ elif choice == "Update Student":
         student_id = student_dict[selected_student]
 
         cursor.execute(
-            "SELECT name, usn FROM students WHERE id = %s",
+            "SELECT name, usn FROM students WHERE id=?",
             (student_id,)
         )
 
@@ -271,19 +266,19 @@ elif choice == "Update Student":
 
         if st.button("Update Student"):
 
-            query = """
-            UPDATE students
-            SET name = %s, usn = %s
-            WHERE id = %s
-            """
-
-            values = (
-                new_name,
-                new_usn,
-                student_id
+            cursor.execute(
+                """
+                UPDATE students
+                SET name=?, usn=?
+                WHERE id=?
+                """,
+                (
+                    new_name,
+                    new_usn,
+                    student_id
+                )
             )
 
-            cursor.execute(query, values)
             conn.commit()
 
             st.success("Student Updated Successfully")
@@ -315,15 +310,13 @@ elif choice == "Delete Student":
 
             student_id = student_dict[selected_student]
 
-            # DELETE ATTENDANCE RECORDS
             cursor.execute(
-                "DELETE FROM attendance WHERE student_id = %s",
+                "DELETE FROM attendance WHERE student_id=?",
                 (student_id,)
             )
 
-            # DELETE STUDENT
             cursor.execute(
-                "DELETE FROM students WHERE id = %s",
+                "DELETE FROM students WHERE id=?",
                 (student_id,)
             )
 
